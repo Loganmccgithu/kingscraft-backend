@@ -29,8 +29,56 @@ app.post("/create-checkout-session", async (req, res) => {
       payment_method_types: ["card"],
       line_items,
       mode: "payment",
-      success_url: "http://localhost:5500/success.html",
-      cancel_url: "http://localhost:5500/cart.html",
+
+      shipping_address_collection: {
+        allowed_countries: ["CA", "US"],
+      },
+
+      shipping_options: [
+        {
+          shipping_rate_data: {
+            type: "fixed_amount",
+            fixed_amount: {
+              amount: 0,
+              currency: "cad",
+            },
+            display_name: "Standard Shipping (No Tracking)",
+            delivery_estimate: {
+              minimum: {
+                unit: "business_day",
+                value: 5,
+              },
+              maximum: {
+                unit: "business_day",
+                value: 10,
+              },
+            },
+          },
+        },
+        {
+          shipping_rate_data: {
+            type: "fixed_amount",
+            fixed_amount: {
+              amount: 2500,
+              currency: "cad",
+            },
+            display_name: "Tracked Shipping",
+            delivery_estimate: {
+              minimum: {
+                unit: "business_day",
+                value: 2,
+              },
+              maximum: {
+                unit: "business_day",
+                value: 5,
+              },
+            },
+          },
+        },
+      ],
+
+      success_url: "https://kingscraft.ca/success.html",
+      cancel_url: "https://kingscraft.ca/cart.html",
     });
 
     res.json({ url: session.url });
