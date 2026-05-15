@@ -81,6 +81,31 @@ app.post("/create-checkout-session", async (req, res) => {
       cancel_url: "https://kingscraft.ca/cart.html",
     });
 
+    // 🔥 DISCORD NOTIFICATION
+    if (process.env.DISCORD_WEBHOOK_URL) {
+
+      const orderText = cart.map(item => `
+Product: ${item.name}
+Size: ${item.size || "N/A"}
+Price: $${item.price}
+`).join("\n");
+
+      await fetch(process.env.DISCORD_WEBHOOK_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          content:
+`🛒 NEW ORDER
+
+${orderText}
+
+Total Items: ${cart.length}`
+        })
+      });
+    }
+
     res.json({ url: session.url });
 
   } catch (err) {
