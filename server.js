@@ -7,6 +7,77 @@ const app = express();
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
 app.use(cors());
+
+// STRIPE WEBHOOK MUST USE RAW BODY
+app.post("/stripe-webhook", express.raw({ type: "application/json" }), async (req, res) => {
+  const sig = req.headers["stripe-signature"];
+
+  let event;
+
+  try {
+    event = stripe.webhooks.constructEvent(
+      req.body,
+      sig,
+      process.env.STRIPE_WEBHOOK_SECRET
+    );
+  } catch (err) {
+    console.error("Webhook signature verification failed:", err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  if (event.type === "checkout.session.completed") {
+    const session = event.data.object;
+
+    try {
+      const cart = JSON.parse(session.metadata.cart || "[]");
+
+      const orderText = cart.map(item => `
+Product: ${item.name}
+Size: ${item.size || "N/A"}
+Price: $${item.price}
+`).join("\n");
+
+      const address = session.customer_details?.address;
+
+      if (process.env.DISCORD_WEBHOOK_URL) {
+        await fetch(process.env.DISCORD_WEBHOOK_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            content:
+`🛒 PAID ORDER
+
+Customer Name: ${session.customer_details?.name || "N/A"}
+Customer Email: ${session.customer_details?.email || "N/A"}
+
+${orderText}
+
+Total Paid: $${(session.amount_total / 100).toFixed(2)} CAD
+
+Shipping Address:
+${address?.line1 || ""}
+${address?.line2 || ""}
+${address?.city || ""}
+${address?.state || ""}
+${address?.postal_code || ""}
+${address?.country || ""}
+
+Stripe Checkout ID:
+${session.id}`
+          })
+        });
+      }
+
+    } catch (err) {
+      console.error("Discord notification failed:", err);
+    }
+  }
+
+  res.json({ received: true });
+});
+
 app.use(express.json());
 
 // CREATE CHECKOUT SESSION
@@ -29,6 +100,10 @@ app.post("/create-checkout-session", async (req, res) => {
       payment_method_types: ["card"],
       line_items,
       mode: "payment",
+
+      metadata: {
+        cart: JSON.stringify(cart)
+      },
 
       shipping_address_collection: {
         allowed_countries: ["CA", "US"],
@@ -80,31 +155,6 @@ app.post("/create-checkout-session", async (req, res) => {
       success_url: "https://kingscraft.ca/success.html",
       cancel_url: "https://kingscraft.ca/cart.html",
     });
-
-    // 🔥 DISCORD NOTIFICATION
-    if (process.env.DISCORD_WEBHOOK_URL) {
-
-      const orderText = cart.map(item => `
-Product: ${item.name}
-Size: ${item.size || "N/A"}
-Price: $${item.price}
-`).join("\n");
-
-      await fetch(process.env.DISCORD_WEBHOOK_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          content:
-`🛒 NEW ORDER
-
-${orderText}
-
-Total Items: ${cart.length}`
-        })
-      });
-    }
 
     res.json({ url: session.url });
 
