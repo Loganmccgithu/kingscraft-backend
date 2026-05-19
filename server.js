@@ -80,6 +80,45 @@ ${session.id}`
 
 app.use(express.json());
 
+// CUSTOM ORDER REQUEST
+app.post("/custom-order", async (req, res) => {
+  const {
+    fullName,
+    email,
+    itemType,
+    details
+  } = req.body;
+
+  try {
+    if (process.env.DISCORD_REQUEST_WEBHOOK_URL) {
+      await fetch(process.env.DISCORD_REQUEST_WEBHOOK_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          content:
+`✨ CUSTOM ORDER REQUEST
+
+Customer Name: ${fullName || "N/A"}
+Customer Email: ${email || "N/A"}
+
+Item Type: ${itemType || "N/A"}
+
+Request Details:
+${details || "N/A"}`
+        })
+      });
+    }
+
+    res.json({ success: true });
+
+  } catch (err) {
+    console.error("Custom order error:", err);
+    res.status(500).json({ success: false });
+  }
+});
+
 // CREATE CHECKOUT SESSION
 app.post("/create-checkout-session", async (req, res) => {
   const { cart } = req.body;
